@@ -1,0 +1,9 @@
+.photoMeasurementPointDynamic {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: #2563eb;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  pointer-events: none;
+}
