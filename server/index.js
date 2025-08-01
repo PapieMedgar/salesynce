@@ -2,7 +2,6 @@ import express from 'express';
 import mysql from 'mysql2';
 import cors from 'cors';
 import bodyParser from 'body-parser';
-import bcrypt from 'bcrypt';
 
 const app = express();
 app.use(cors());
@@ -16,53 +15,69 @@ const db = mysql.createConnection({
   database: 'salessync'
 });
 
-// Connect to MySQL
-db.connect((err) => {
+db.connect(err => {
   if (err) {
-    console.error('MySQL connection error:', err);
+    console.error('❌ MySQL connection error:', err);
   } else {
-    console.log('Connected to MySQL database.');
+    console.log('✅ Connected to MySQL database.');
   }
 });
 
-// Login route that checks email + role
+// Login route
 app.post('/SignIn', (req, res) => {
-  const { email, password, role } = req.body;
+  const { email, password } = req.body;
 
-  if (!email || !password || !role) {
-    return res.status(400).json({ error: 'Email, password, and role are required' });
+  console.log('Login attempt:', { email, password });
+
+  if (!email || !password) {
+    return res.status(400).json({ success: false, error: 'Email and password are required.' });
   }
 
-  // Look for user with matching email AND role
-  db.query('SELECT * FROM user WHERE email = ? AND role = ?', [email, role], async (err, results) => {
+  db.query('SELECT * FROM user WHERE email = ?', [email], (err, results) => {
     if (err) {
-      console.error('Database query error:', err);
-      return res.status(500).json({ error: 'Database error' });
+      console.error('❌ Database query error:', err);
+      return res.status(500).json({ success: false, error: 'Database error.' });
     }
 
     if (results.length === 0) {
-      return res.status(401).json({ error: 'No user found with this email and role' });
+      return res.status(401).json({ success: false, error: 'Incorrect email or password.' });
     }
 
     const user = results[0];
-    try {
-      const match = await bcrypt.compare(password, user.password);
-      if (match) {
-        res.json({
-          success: true,
-          message: 'Login successful',
-          email: user.email,
-          role: user.role
-        });
-      } else {
-        res.status(401).json({ error: 'Invalid password' });
-      }
-    } catch (bcryptErr) {
-      console.error('Bcrypt error:', bcryptErr);
-      res.status(500).json({ error: 'Internal server error' });
+    console.log('Stored password:', user.password);
+    console.log('User role from DB:', `"${user.role}"`);
+
+    // Plain text password check (temporary)
+    if (password !== user.password) {
+      return res.status(401).json({ success: false, error: 'Incorrect email or password.' });
     }
+
+    // Normalize role: remove whitespace and lowercase
+    const roleRaw = user.role || '';
+    const role = roleRaw.replace(/\s+/g, '').toLowerCase();
+
+    console.log(`Normalized role: "${role}"`);
+
+    // Include 'fieldagent' in valid roles
+    const validRoles = ['admin', 'footsoldier', 'agent', 'fieldagent'];
+    if (!validRoles.includes(role)) {
+      return res.status(403).json({ success: false, error: 'Unknown role. Access denied.' });
+    }
+
+    // Success response
+    return res.json({
+      success: true,
+      message: 'Login successful',
+      email: user.email,
+      role: role
+    });
   });
 });
 
 const PORT = 4000;
-app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
+});
+
+export default app;
+export { db };
